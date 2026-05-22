@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎮 Toddler Fun Zone!</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a0a2e;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Fredoka One', cursive;
+    cursor: none;
+  }
+
+  #bg-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  #game-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+  }
+
+  #ui {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  #score-display {
+    position: absolute;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 72px;
+    color: #fff;
+    text-shadow: 0 0 20px #ff6ef7, 0 0 40px #ff6ef7, 4px 4px 0 #c700a0;
+    letter-spacing: 4px;
+    animation: scorePulse 1s ease-in-out infinite alternate;
+  }
+
+  @keyframes scorePulse {
+    from { transform: translateX(-50%) scale(1); }
+    to   { transform: translateX(-50%) scale(1.06); }
+  }
+
+  #connect-msg {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 28px;
+    color: rgba(255,255,255,0.7);
+    text-align: center;
+    background: rgba(0,0,0,0.4);
+    padding: 12px 30px;
+    border-radius: 50px;
+    border: 2px solid rgba(255,255,255,0.2);
+    transition: opacity 0.5s;
+  }
+
+  #combo-display {
+    position: absolute;
+    top: 130px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 48px;
+    color: #ffe94d;
+    text-shadow: 0 0 15px #ff9500, 3px 3px 0 #b05c00;
+    opacity: 0;
+    transition: opacity 0.3s;
+    white-space: nowrap;
+  }
+
+  /* Star burst on button press */
+  .starburst {
+    position: fixed;
+    pointer-events: none;
+    z-index: 10;
+    font-size: 60px;
+    animation: burst 0.7s ease-out forwards;
+  }
+  @keyframes burst {
+    0%   { transform: scale(0.2) rotate(0deg); opacity: 1; }
+    60%  { transform: scale(1.4) rotate(20deg); opacity: 1; }
+    100% { transform: scale(2)   rotate(40deg); opacity: 0; }
+  }
+
+  /* Ripple on screen flash */
+  .ripple {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 5;
+    animation: rippleOut 0.8s ease-out forwards;
+  }
+  @keyframes rippleOut {
+    from { transform: scale(0); opacity: 0.8; }
+    to   { transform: scale(6); opacity: 0; }
+  }
+
+  #spin-char {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 120px;
+    z-index: 3;
+    user-select: none;
+    transition: font-size 0.1s;
+    filter: drop-shadow(0 0 20px rgba(255,255,255,0.6));
+  }
+
+  #controls-hint {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    opacity: 0.85;
+  }
+  .hint-pill {
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 30px;
+    padding: 8px 20px;
+    font-size: 20px;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .hint-pill span { font-size: 24px; }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<canvas id="game-canvas"></canvas>
+
+<div id="ui">
+  <div id="score-display">⭐ 0</div>
+  <div id="combo-display"></div>
+  <div id="spin-char">🐱</div>
+
+  <div id="controls-hint">
+    <div class="hint-pill"><span>🕹️</span> Stick → Arrows</div>
+    <div class="hint-pill"><span>🅐</span> Spin!</div>
+    <div class="hint-pill"><span>🅑</span> Flash!</div>
+    <div class="hint-pill"><span>🅧</span> Change Buddy</div>
+    <div class="hint-pill"><span>🅨</span> Fireworks!</div>
+  </div>
+
+  <div id="connect-msg">🎮 Connect an Xbox controller and press any button!<br><small>(Keyboard also works: WASD / Arrow keys, Space, Enter, Z, X)</small></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+const state = {
+  score: 0,
+  combo: 0,
+  spinning: false,
+  spinAngle: 0,
+  spinSpeed: 0,
+  bgHue: 260,
+  controllerConnected: false,
+  buddyIndex: 0,
+  lastButtons: new Array(20).fill(false),
+  arrows: [],
+  particles: [],
+  starbursts: [],
+  fireworksActive: false,
+  fireworkTimer: 0,
+};
+
+const BUDDIES = ['🐱','🐶','🐸','🦊','🐼','🦄','🐲','🦋','🐙','🌟'];
+const ARROW_COLORS = ['#ff4dff','#4dffb8','#ffdd4d','#4d9fff','#ff6b4d','#b8ff4d','#ff4d88','#4dfff0'];
+const BG_COLORS = [
+  [260, '#1a0a2e'], [200, '#0a1a2e'], [320, '#2e0a1a'],
+  [140, '#0a2e0a'], [30,  '#2e1a0a'], [280, '#1a0a2e'],
+];
+
+// ─────────────────────────────────────────────
+//  CANVAS SETUP
+// ─────────────────────────────────────────────
+const bgCanvas  = document.getElementById('bg-canvas');
+const gc        = document.getElementById('game-canvas');
+const bgCtx     = bgCanvas.getContext('2d');
+const ctx       = gc.getContext('2d');
+
+function resize() {
+  bgCanvas.width = gc.width = window.innerWidth;
+  bgCanvas.height = gc.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─────────────────────────────────────────────
+//  SCORE + UI HELPERS
+// ─────────────────────────────────────────────
+const scoreEl = document.getElementById('score-display');
+const comboEl = document.getElementById('combo-display');
+const connectMsg = document.getElementById('connect-msg');
+const spinChar   = document.getElementById('spin-char');
+
+let comboTimeout;
+function addScore(pts) {
+  state.score += pts;
+  state.combo++;
+  scoreEl.textContent = `⭐ ${state.score}`;
+  if (state.combo > 1) {
+    comboEl.textContent = `🔥 x${state.combo} COMBO!`;
+    comboEl.style.opacity = '1';
+    clearTimeout(comboTimeout);
+    comboTimeout = setTimeout(() => {
+      comboEl.style.opacity = '0';
+      state.combo = 0;
+    }, 1500);
+  }
+}
+
+function showStarburst(x, y, emoji) {
+  const el = document.createElement('div');
+  el.className = 'starburst';
+  el.textContent = emoji || ['⭐','💥','✨','🌟','💫','🎉'][Math.floor(Math.random()*6)];
+  el.style.left = (x - 30) + 'px';
+  el.style.top  = (y - 30) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 700);
+}
+
+function flashRipple(x, y, color) {
+  const el = document.createElement('div');
+  el.className = 'ripple';
+  const size = 120;
+  el.style.cssText = `width:${size}px;height:${size}px;left:${x-size/2}px;top:${y-size/2}px;background:${color};`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 800);
+}
+
+// ─────────────────────────────────────────────
+//  ARROWS
+// ─────────────────────────────────────────────
+function spawnArrow(dx, dy) {
+  const W = gc.width, H = gc.height;
+  let x, y;
+  // Start from edge opposite to direction
+  if (Math.abs(dx) > Math.abs(dy)) {
+    x = dx > 0 ? -80 : W + 80;
+    y = H * 0.2 + Math.random() * H * 0.6;
+  } else {
+    x = W * 0.2 + Math.random() * W * 0.6;
+    y = dy > 0 ? -80 : H + 80;
+  }
+  const speed = 8 + Math.random() * 10;
+  const len   = Math.sqrt(dx*dx + dy*dy) || 1;
+  state.arrows.push({
+    x, y,
+    vx: (dx / len) * speed,
+    vy: (dy / len) * speed,
+    color: ARROW_COLORS[Math.floor(Math.random() * ARROW_COLORS.length)],
+    size: 40 + Math.random() * 40,
+    life: 1,
+    rot: Math.atan2(dy, dx),
+    trail: [],
+  });
+  addScore(1);
+}
+
+function drawArrowShape(ctx, size, color) {
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  // Arrow pointing right, will be rotated
+  ctx.moveTo(size * 0.5, 0);
+  ctx.lineTo(-size * 0.2, size * 0.35);
+  ctx.lineTo(-size * 0.2, size * 0.15);
+  ctx.lineTo(-size * 0.5, size * 0.15);
+  ctx.lineTo(-size * 0.5, -size * 0.15);
+  ctx.lineTo(-size * 0.2, -size * 0.15);
+  ctx.lineTo(-size * 0.2, -size * 0.35);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+// ─────────────────────────────────────────────
+//  PARTICLES
+// ─────────────────────────────────────────────
+function spawnParticles(x, y, count, color) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const speed = 4 + Math.random() * 8;
+    state.particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      color: color || ARROW_COLORS[Math.floor(Math.random() * ARROW_COLORS.length)],
+      size: 8 + Math.random() * 12,
+      life: 1,
+    });
+  }
+}
+
+// ─────────────────────────────────────────────
+//  FIREWORKS
+// ─────────────────────────────────────────────
+function launchFirework() {
+  const W = gc.width, H = gc.height;
+  const x = W * 0.15 + Math.random() * W * 0.7;
+  const y = H * 0.1  + Math.random() * H * 0.5;
+  const color = ARROW_COLORS[Math.floor(Math.random() * ARROW_COLORS.length)];
+  spawnParticles(x, y, 30, color);
+  showStarburst(x, y, ['🎆','🎇','✨','💥','🌟'][Math.floor(Math.random()*5)]);
+  addScore(5);
+}
+
+// ─────────────────────────────────────────────
+//  SPINNING CHARACTER
+// ─────────────────────────────────────────────
+function triggerSpin() {
+  state.spinning = true;
+  state.spinSpeed = 25 + Math.random() * 15;
+  spawnParticles(gc.width/2, gc.height/2, 20);
+  showStarburst(gc.width/2, gc.height/2 - 80, '💫');
+  addScore(3);
+}
+
+function changeBuddy() {
+  state.buddyIndex = (state.buddyIndex + 1) % BUDDIES.length;
+  spinChar.textContent = BUDDIES[state.buddyIndex];
+  spawnParticles(gc.width/2, gc.height/2, 15);
+  showStarburst(gc.width/2 + 60, gc.height/2 - 60, '✨');
+  addScore(2);
+}
+
+// ─────────────────────────────────────────────
+//  BACKGROUND DRAWING
+// ─────────────────────────────────────────────
+let bgStars = [];
+function initStars() {
+  bgStars = [];
+  for (let i = 0; i < 120; i++) {
+    bgStars.push({
+      x: Math.random() * bgCanvas.width,
+      y: Math.random() * bgCanvas.height,
+      r: 1 + Math.random() * 3,
+      speed: 0.2 + Math.random() * 0.5,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+}
+initStars();
+window.addEventListener('resize', initStars);
+
+function drawBackground(t) {
+  const W = bgCanvas.width, H = bgCanvas.height;
+  state.bgHue = (state.bgHue + 0.15) % 360;
+
+  // Gradient background
+  const grad = bgCtx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W,H)*0.8);
+  grad.addColorStop(0, `hsl(${state.bgHue}, 60%, 15%)`);
+  grad.addColorStop(1, `hsl(${(state.bgHue+60)%360}, 80%, 5%)`);
+  bgCtx.fillStyle = grad;
+  bgCtx.fillRect(0, 0, W, H);
+
+  // Twinkling stars
+  for (const s of bgStars) {
+    s.phase += 0.02;
+    const alpha = 0.4 + 0.6 * Math.abs(Math.sin(s.phase));
+    bgCtx.beginPath();
+    bgCtx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    bgCtx.fillStyle = `rgba(255,255,255,${alpha})`;
+    bgCtx.fill();
+  }
+}
+
+// ─────────────────────────────────────────────
+//  MAIN GAME LOOP
+// ─────────────────────────────────────────────
+let lastT = 0;
+function loop(t) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(t - lastT, 50);
+  lastT = t;
+
+  const W = gc.width, H = gc.height;
+
+  // ── Controller polling ──
+  const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const gp of gamepads) {
+    if (!gp) continue;
+    if (!state.controllerConnected) {
+      state.controllerConnected = true;
+      connectMsg.style.opacity = '0';
+    }
+
+    // Left stick
+    const lx = gp.axes[0] || 0;
+    const ly = gp.axes[1] || 0;
+    const deadzone = 0.25;
+    if (Math.abs(lx) > deadzone || Math.abs(ly) > deadzone) {
+      if (Math.random() < 0.25) spawnArrow(lx, ly);
+    }
+
+    // D-pad (buttons 12-15)
+    const dpad = [
+      [12,  0, -1], // up
+      [13,  0,  1], // down
+      [14, -1,  0], // left
+      [15,  1,  0], // right
+    ];
+    for (const [idx, dx, dy] of dpad) {
+      if (gp.buttons[idx]?.pressed) {
+        if (!state.lastButtons[idx]) spawnArrow(dx, dy);
+      }
+    }
+
+    // Buttons
+    const pressed = (i) => gp.buttons[i]?.pressed;
+    const wasPressed = (i) => state.lastButtons[i];
+
+    // A (0) = spin
+    if (pressed(0) && !wasPressed(0)) triggerSpin();
+    // B (1) = flash ripple
+    if (pressed(1) && !wasPressed(1)) {
+      const color = ARROW_COLORS[Math.floor(Math.random() * ARROW_COLORS.length)];
+      flashRipple(W/2, H/2, color);
+      spawnParticles(W/2, H/2, 25, color);
+      addScore(2);
+    }
+    // X (2) = change buddy
+    if (pressed(2) && !wasPressed(2)) changeBuddy();
+    // Y (3) = fireworks
+    if (pressed(3) && !wasPressed(3)) {
+      state.fireworksActive = true;
+      state.fireworkTimer = 120;
+    }
+
+    // Save last state
+    for (let i = 0; i < gp.buttons.length; i++) {
+      state.lastButtons[i] = gp.buttons[i]?.pressed || false;
+    }
+  }
+
+  // ── Fireworks auto-launch ──
+  if (state.fireworksActive) {
+    state.fireworkTimer--;
+    if (state.fireworkTimer <= 0) state.fireworksActive = false;
+    if (Math.random() < 0.15) launchFirework();
+  }
+
+  // ── Spinning character ──
+  if (state.spinSpeed > 0) {
+    state.spinAngle += state.spinSpeed;
+    state.spinSpeed *= 0.94;
+    if (state.spinSpeed < 0.5) { state.spinSpeed = 0; state.spinning = false; }
+  }
+  spinChar.style.transform = `translate(-50%, -50%) rotate(${state.spinAngle}deg) scale(${1 + state.spinSpeed * 0.01})`;
+
+  // ── Clear game canvas ──
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Draw background ──
+  drawBackground(t);
+
+  // ── Update & draw arrows ──
+  for (let i = state.arrows.length - 1; i >= 0; i--) {
+    const a = state.arrows[i];
+    a.trail.push({ x: a.x, y: a.y });
+    if (a.trail.length > 8) a.trail.shift();
+    a.x += a.vx;
+    a.y += a.vy;
+
+    // Draw trail
+    for (let j = 0; j < a.trail.length; j++) {
+      const alpha = (j / a.trail.length) * 0.4;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(a.trail[j].x, a.trail[j].y);
+      ctx.rotate(a.rot);
+      drawArrowShape(ctx, a.size * (j / a.trail.length), a.color);
+      ctx.restore();
+    }
+
+    // Draw arrow
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate(a.rot);
+    drawArrowShape(ctx, a.size, a.color);
+    ctx.restore();
+
+    // Remove if off screen
+    if (a.x < -200 || a.x > W+200 || a.y < -200 || a.y > H+200) {
+      state.arrows.splice(i, 1);
+    }
+  }
+
+  // ── Update & draw particles ──
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15; // gravity
+    p.vx *= 0.97;
+    p.life -= 0.02;
+    if (p.life <= 0) { state.particles.splice(i, 1); continue; }
+
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Floating score numbers (ambient) ──
+  if (state.score > 0 && Math.random() < 0.005) {
+    const x = 80 + Math.random() * (W - 160);
+    const y = 80 + Math.random() * (H - 160);
+    showStarburst(x, y);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  KEYBOARD FALLBACK
+// ─────────────────────────────────────────────
+const keys = new Set();
+document.addEventListener('keydown', (e) => {
+  if (keys.has(e.code)) return;
+  keys.add(e.code);
+  connectMsg.style.opacity = '0';
+
+  const map = {
+    'ArrowUp':    [0, -1], 'KeyW':      [0, -1],
+    'ArrowDown':  [0,  1], 'KeyS':      [0,  1],
+    'ArrowLeft':  [-1, 0], 'KeyA':      [-1, 0],
+    'ArrowRight': [1,  0], 'KeyD':      [1,  0],
+  };
+  if (map[e.code]) spawnArrow(...map[e.code]);
+  if (e.code === 'Space')  triggerSpin();
+  if (e.code === 'Enter')  { const c = ARROW_COLORS[Math.floor(Math.random()*ARROW_COLORS.length)]; flashRipple(gc.width/2, gc.height/2, c); spawnParticles(gc.width/2, gc.height/2, 25, c); addScore(2); }
+  if (e.code === 'KeyZ')   changeBuddy();
+  if (e.code === 'KeyX')   { state.fireworksActive = true; state.fireworkTimer = 120; }
+});
+document.addEventListener('keyup', (e) => keys.delete(e.code));
+
+// Continuous arrow spawn while key held
+setInterval(() => {
+  const map = {
+    'ArrowUp': [0,-1], 'KeyW': [0,-1],
+    'ArrowDown': [0,1], 'KeyS': [0,1],
+    'ArrowLeft': [-1,0], 'KeyA': [-1,0],
+    'ArrowRight': [1,0], 'KeyD': [1,0],
+  };
+  for (const [code, dir] of Object.entries(map)) {
+    if (keys.has(code) && Math.random() < 0.4) spawnArrow(...dir);
+  }
+}, 80);
+
+// ─────────────────────────────────────────────
+//  GAMEPAD CONNECT EVENTS
+// ─────────────────────────────────────────────
+window.addEventListener('gamepadconnected', (e) => {
+  state.controllerConnected = true;
+  connectMsg.textContent = `🎮 Controller connected! Let's play!`;
+  setTimeout(() => connectMsg.style.opacity = '0', 2000);
+  launchFirework(); launchFirework(); launchFirework();
+});
+window.addEventListener('gamepaddisconnected', () => {
+  state.controllerConnected = false;
+  connectMsg.textContent = '🎮 Controller disconnected...';
+  connectMsg.style.opacity = '1';
+});
+
+// ─────────────────────────────────────────────
+//  START
+// ─────────────────────────────────────────────
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
