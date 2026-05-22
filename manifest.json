@@ -1,0 +1,16 @@
+{
+  "name": "Toddler Fun Zone",
+  "short_name": "ToddlerFun",
+  "description": "A fun colorful game for toddlers with Xbox controller support",
+  "start_url": "/toddler-game/",
+  "display": "fullscreen",
+  "background_color": "#1a0a2e",
+  "theme_color": "#ff6ef7",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
