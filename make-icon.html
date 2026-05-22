@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head><title>Icon Generator</title></head>
+<body style="font-family:sans-serif;padding:20px;background:#1a0a2e;color:white;text-align:center">
+<h2>🎮 Toddler Fun Zone — Icon Generator</h2>
+<canvas id="c" width="512" height="512" style="border-radius:20px;margin:20px"></canvas>
+<br>
+<button onclick="download()" style="font-size:20px;padding:12px 30px;background:#ff6ef7;border:none;border-radius:10px;cursor:pointer;color:white;font-weight:bold">
+  ⬇️ Download icon.png
+</button>
+<p style="opacity:0.7">Download this file, then upload it to your GitHub repo</p>
+
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+
+// Background
+const grad = ctx.createRadialGradient(256,256,0,256,256,300);
+grad.addColorStop(0,'#3a1a5e');
+grad.addColorStop(1,'#1a0a2e');
+ctx.fillStyle = grad;
+ctx.roundRect(0,0,512,512,60);
+ctx.fill();
+
+// Stars
+ctx.fillStyle = 'rgba(255,255,255,0.8)';
+const stars = [[50,80],[120,40],[200,90],[350,30],[420,70],[480,50],[30,200],[490,180],[60,350],[480,320],[100,450],[420,460]];
+for(const [x,y] of stars){
+  ctx.beginPath();
+  ctx.arc(x,y,3,0,Math.PI*2);
+  ctx.fill();
+}
+
+// Controller body
+ctx.fillStyle = '#2a2a4a';
+ctx.strokeStyle = '#6644aa';
+ctx.lineWidth = 4;
+ctx.beginPath();
+ctx.roundRect(100,180,312,200,40);
+ctx.fill();
+ctx.stroke();
+
+// Left grip
+ctx.fillStyle = '#2a2a4a';
+ctx.strokeStyle = '#6644aa';
+ctx.lineWidth = 4;
+ctx.beginPath();
+ctx.roundRect(90,300,120,120,30);
+ctx.fill();
+ctx.stroke();
+
+// Right grip
+ctx.beginPath();
+ctx.roundRect(302,300,120,120,30);
+ctx.fill();
+ctx.stroke();
+
+// D-pad
+ctx.fillStyle = '#444466';
+ctx.beginPath();
+ctx.roundRect(150,240,20,60,4);
+ctx.fill();
+ctx.beginPath();
+ctx.roundRect(130,260,60,20,4);
+ctx.fill();
+
+// ABXY buttons
+const btns = [
+  [340,240,'#22cc66'], // A green
+  [370,220,'#dd4444'], // B red  
+  [310,220,'#4488ff'], // X blue
+  [340,200,'#ffcc00'], // Y yellow
+];
+for(const [x,y,col] of btns){
+  ctx.fillStyle = col;
+  ctx.shadowColor = col;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.arc(x,y,14,0,Math.PI*2);
+  ctx.fill();
+}
+ctx.shadowBlur = 0;
+
+// Center button glow
+ctx.fillStyle = '#ff6ef7';
+ctx.shadowColor = '#ff6ef7';
+ctx.shadowBlur = 20;
+ctx.beginPath();
+ctx.arc(256,250,22,0,Math.PI*2);
+ctx.fill();
+ctx.shadowBlur = 0;
+
+// Stars emoji text
+ctx.font = 'bold 48px serif';
+ctx.textAlign = 'center';
+ctx.fillStyle = '#ffe94d';
+ctx.shadowColor = '#ff9500';
+ctx.shadowBlur = 10;
+ctx.fillText('⭐', 256, 440);
+ctx.shadowBlur = 0;
+
+function download(){
+  const a = document.createElement('a');
+  a.download = 'icon.png';
+  a.href = c.toDataURL('image/png');
+  a.click();
+}
+</script>
+</body>
+</html>
